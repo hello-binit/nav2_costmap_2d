@@ -73,6 +73,8 @@ void BinaryFilter::initializeFilter(
   node->get_parameter(name_ + "." + "binary_state_topic", binary_state_topic);
   declareParameter("flip_threshold", rclcpp::ParameterValue(50.0));
   node->get_parameter(name_ + "." + "flip_threshold", flip_threshold_);
+  declareParameter("footprint_radius", rclcpp:ParameterValue(0.0));
+  node->get_parameter(name_ + "." + "footprint_radius", footprint_radius_)
 
   filter_info_topic_ = filter_info_topic;
   // Setting new costmap filter info subscriber
@@ -197,19 +199,54 @@ void BinaryFilter::process(
     return;
   }
 
-  // Getting filter_mask data from cell where the robot placed
-  int8_t mask_data = getMaskData(filter_mask_, mask_robot_i, mask_robot_j);
-  if (mask_data == nav2_util::OCC_GRID_UNKNOWN) {
-    // Corresponding filter mask cell is unknown.
-    // Warn and do nothing.
-    RCLCPP_WARN_THROTTLE(
-      logger_, *(clock_), 2000,
-      "BinaryFilter: Filter mask [%i, %i] data is unknown. Do nothing.",
-      mask_robot_i, mask_robot_j);
-    return;
+  bool zone_triggered = false;
+
+  if (footprint_radius_ > 0.0) {
+    float res = filter_mask_->info.resolution;
+    if (res > 0.0f) {
+      int radius_cells = std::ceil(footprint_radius_ / res);
+      for (int dy = -radius_cells; dy <= radius_cells; ++dy) {
+        for (int dx = -radius_cells; dx <= radius_cells; ++dx) {
+          if (std::hypot(dx * res, dy * res) <= footprint_radius_) {
+            int mx = static_cast<int>(mask_robot_i) + dx;
+            int my = static_cast<int>(mask_robot_j) + dy;
+
+            // Check bounds
+            if (mx >= 0 && mx < static_cast<int>(filter_mask_->info.width) &&
+                my >= 0 && my < static_cast<int>(filter_mask_->info.height)) {
+              int8_t mask_data = getMaskData(filter_mask_, mx, my);
+              if (mask_data != nav2_util::OCC_GRID_UNKNOWN) {
+                if (base_ + mask_data * multiplier_ > flip_threshold_) {
+                  zone_triggered = true;
+                  break;
+                }
+              }
+            }
+          }
+        }
+        if (zone_triggered) {
+          break;
+        }
+      }
+    }
+  } else {
+    // Getting filter_mask data from cell where the robot placed
+    int8_t mask_data = getMaskData(filter_mask_, mask_robot_i, mask_robot_j);
+    if (mask_data == nav2_util::OCC_GRID_UNKNOWN) {
+      // Corresponding filter mask cell is unknown.
+      // Warn and do nothing.
+      RCLCPP_WARN_THROTTLE(
+        logger_, *(clock_), 2000,
+        "BinaryFilter: Filter mask [%i, %i] data is unknown. Do nothing.",
+        mask_robot_i, mask_robot_j);
+      return;
+    }
+    if (base_ + mask_data * multiplier_ > flip_threshold_) {
+      zone_triggered = true;
+    }
   }
   // Check and flip binary state, if necessary
-  if (base_ + mask_data * multiplier_ > flip_threshold_) {
+  if (zone_triggered) {
     if (binary_state_ == default_state_) {
       changeState(!default_state_);
     }

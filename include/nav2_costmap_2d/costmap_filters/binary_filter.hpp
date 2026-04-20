@@ -115,6 +115,7 @@ private:
   // Filter values higher than this threshold,
   // will set binary state to non-default
   double flip_threshold_;
+  double footprint_radius_;
 
   bool default_state_;  // Default Binary Filter state
   bool binary_state_;  // Current Binary Filter state
