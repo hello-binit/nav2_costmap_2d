@@ -73,8 +73,8 @@ void BinaryFilter::initializeFilter(
   node->get_parameter(name_ + "." + "binary_state_topic", binary_state_topic);
   declareParameter("flip_threshold", rclcpp::ParameterValue(50.0));
   node->get_parameter(name_ + "." + "flip_threshold", flip_threshold_);
-  declareParameter("footprint_radius", rclcpp:ParameterValue(0.0));
-  node->get_parameter(name_ + "." + "footprint_radius", footprint_radius_)
+  declareParameter("footprint_radius", rclcpp::ParameterValue(0.0));
+  node->get_parameter(name_ + "." + "footprint_radius", footprint_radius_);
 
   filter_info_topic_ = filter_info_topic;
   // Setting new costmap filter info subscriber
